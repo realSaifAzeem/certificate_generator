@@ -2,8 +2,7 @@ import streamlit as st
 from PIL import Image, ImageDraw, ImageFont
 import os
 import json
-import pandas as pd
-from fpdf import FPDF
+from io import BytesIO
 
 st.set_page_config(page_title="🎓 Certificate Generator", layout="centered")
 st.title("🎓 LMDC Certificate Generator App")
@@ -18,7 +17,7 @@ os.makedirs(TEMPLATE_DIR, exist_ok=True)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # --- Template Upload and Selection ---
-st.sidebar.subheader("📤 Upload Certificate Templates")
+st.sidebar.subheader("📄 Upload Certificate Templates")
 uploaded_templates = st.sidebar.file_uploader("Upload Templates (JPG/PNG)", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
 
 if uploaded_templates:
@@ -134,7 +133,7 @@ if st.sidebar.button("📂 Load Settings"):
         st.sidebar.error("Could not load config.")
 
 # --- CSV Upload ---
-csv_file = st.sidebar.file_uploader("📥 Upload CSV (name, topic, date)", type=["csv"])
+csv_file = st.sidebar.file_uploader("📅 Upload CSV (name, topic, date)", type=["csv"])
 
 # --- Text Rendering with Styles ---
 def draw_text(draw, pos, text, font_path, size, color, bold=False, italic=False, underline=False):
@@ -184,33 +183,18 @@ st.image(preview_img)
 
 # --- Certificate Download ---
 if st.button("🎓 Generate Certificate"):
-    certificate_path = generate_certificate(name_input, topic_input, date_input)
-    with open(certificate_path, "rb") as f:
-        st.download_button("📥 Download as Image (JPG)", f, file_name=os.path.basename(certificate_path), mime="image/jpeg")
+    certificate_img = generate_certificate(name_input, topic_input, date_input, preview=True)
 
-    # PDF export
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.image(certificate_path, x=0, y=0, w=210, h=297)
-    pdf_path = certificate_path.replace(".jpg", ".pdf")
-    pdf.output(pdf_path)
+    img_buffer = BytesIO()
+    certificate_img.save(img_buffer, format="JPEG")
+    img_buffer.seek(0)
 
-    with open(pdf_path, "rb") as fpdf_out:
-        st.download_button("📄 Download as PDF", fpdf_out, file_name=os.path.basename(pdf_path), mime="application/pdf")
+    pdf_buffer = BytesIO()
+    certificate_img.convert("RGB").save(pdf_buffer, format="PDF")
+    pdf_buffer.seek(0)
 
-# --- Bulk Export ---
-if csv_file is not None:
-    df = pd.read_csv(csv_file)
-    st.write("📊 Preview CSV:", df.head())
-
-    if st.button("📤 Generate Bulk Certificates (JPG + PDF)"):
-        for i, row in df.iterrows():
-            name, topic, date = row["name"], row["topic"], row["date"]
-            cert_path = generate_certificate(name, topic, date)
-
-            pdf = FPDF()
-            pdf.add_page()
-            pdf.image(cert_path, x=0, y=0, w=210, h=297)
-            pdf.output(cert_path.replace(".jpg", ".pdf"))
-
-        st.success("✅ Bulk certificates generated and saved to output folder!")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.download_button("📸 Download as JPG", img_buffer, file_name=f"{name_input}.jpg", mime="image/jpeg")
+    with col2:
+        st.download_button("📄 Download as PDF", pdf_buffer, file_name=f"{name_input}.pdf", mime="application/pdf")
