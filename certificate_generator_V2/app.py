@@ -2,6 +2,7 @@ import streamlit as st
 from PIL import Image, ImageDraw, ImageFont
 import os
 import json
+from io import BytesIO
 
 st.set_page_config(page_title="🎓 Certificate Generator", layout="centered")
 st.title("🎓 LMDC Certificate Generator App")
@@ -16,7 +17,7 @@ os.makedirs(TEMPLATE_DIR, exist_ok=True)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # --- Template Upload and Selection ---
-st.sidebar.subheader("📤 Upload Certificate Templates")
+st.sidebar.subheader("📄 Upload Certificate Templates")
 uploaded_templates = st.sidebar.file_uploader("Upload Templates (JPG/PNG)", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
 
 if uploaded_templates:
@@ -132,15 +133,13 @@ if st.sidebar.button("📂 Load Settings"):
         st.sidebar.error("Could not load config.")
 
 # --- CSV Upload ---
-csv_file = st.sidebar.file_uploader("📥 Upload CSV (name, topic, date)", type=["csv"])
+csv_file = st.sidebar.file_uploader("📅 Upload CSV (name, topic, date)", type=["csv"])
 
 # --- Text Rendering with Styles ---
 def draw_text(draw, pos, text, font_path, size, color, bold=False, italic=False, underline=False):
     try:
-        # Try loading the custom font if available
         font = ImageFont.truetype(font_path, size)
     except IOError:
-        # Fallback to default font if custom font is not found
         font = ImageFont.load_default()
 
     if bold:
@@ -184,6 +183,18 @@ st.image(preview_img)
 
 # --- Certificate Download ---
 if st.button("🎓 Generate Certificate"):
-    certificate_path = generate_certificate(name_input, topic_input, date_input)
-    with open(certificate_path, "rb") as f:
-        st.download_button("📥 Download Certificate", f, file_name=os.path.basename(certificate_path), mime="image/jpeg")
+    certificate_img = generate_certificate(name_input, topic_input, date_input, preview=True)
+
+    img_buffer = BytesIO()
+    certificate_img.save(img_buffer, format="JPEG")
+    img_buffer.seek(0)
+
+    pdf_buffer = BytesIO()
+    certificate_img.convert("RGB").save(pdf_buffer, format="PDF")
+    pdf_buffer.seek(0)
+
+    col1, col2 = st.columns(2)
+    with col1:
+        st.download_button("📸 Download as JPG", img_buffer, file_name=f"{name_input}.jpg", mime="image/jpeg")
+    with col2:
+        st.download_button("📄 Download as PDF", pdf_buffer, file_name=f"{name_input}.pdf", mime="application/pdf")
